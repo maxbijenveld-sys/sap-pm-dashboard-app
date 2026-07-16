@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Onderhoudsdashboard Heidelberg Materials IJmuiden — weekplanning, backlog, analyse en financiën.">
+<meta name="theme-color" content="#238636">
+<title>SAP PM Weekplanning Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23004E2B'/%3E%3Cpath d='M9 22V10h4.2a4 4 0 1 1 0 8H12v4H9zm3-7h1a1.5 1.5 0 1 0 0-3h-1v3zm7 7V10h3l2 5 2-5h-2.5' fill='none'/%3E%3Ctext x='16' y='22' font-family='Segoe UI,Arial' font-size='13' font-weight='700' fill='%2300DD39' text-anchor='middle'%3EPM%3C/text%3E%3C/svg%3E">
+<!-- Vroege verbinding met Supabase (auth + data) en de CDN's: scheelt een
+     DNS/TLS-rondgang op precies het moment dat de eerste fetch vertrekt. -->
+<link rel="preconnect" href="https://gohmnfgpczaeoysamlwy.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="preconnect" href="https://cdn.sheetjs.com" crossorigin>
+<!-- defer: geen van deze libraries is nodig vóór DOM-ready (XLSX pas bij
+     upload, Chart pas na login), dus ze hoeven de eerste render niet te
+     blokkeren. Volgorde blijft gegarandeerd (defer voert uit in documentorde). -->
+<script defer src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" integrity="sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG" crossorigin="anonymous"></script>
+<script defer src="parser.js"></script>
+<script defer src="js/risk.js"></script>
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/finance.css">
+</head>
+<body>
+
+<div id="bgFx" aria-hidden="true">
+  <div class="scene" id="bgScene">
+    <div class="blob b1"><div class="blob-inner"></div></div>
+    <div class="blob b2"><div class="blob-inner"></div></div>
+    <div class="blob b3"><div class="blob-inner"></div></div>
+    <div class="blob b4"><div class="blob-inner"></div></div>
+  </div>
+</div>
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">SAP PM <span>Dashboard</span></div>
+    <div class="login-sub">Heidelberg Materials — Onderhoud</div>
+    <label class="login-label" for="loginEmail" style="display:block">E-mailadres</label>
+    <input class="login-inp" type="email" id="loginEmail" autocomplete="email" placeholder="naam@heidelbergmaterials.com" onkeydown="if(event.key==='Enter')handleLogin()">
+    <label class="login-label" for="loginPassword" style="display:block">Wachtwoord</label>
+    <input class="login-inp" type="password" id="loginPassword" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')handleLogin()">
+    <button class="login-btn" id="loginBtn" onclick="handleLogin()">Inloggen</button>
+    <div class="login-err" id="loginError"></div>
+    <button type="button" class="login-forgot" onclick="openForgotPassword()">Wachtwoord vergeten?</button>
+  </div>
+</div>
+
+<!-- Wachtwoord vergeten: e-mailadres invoeren -> Supabase stuurt een resetlink. -->
+<div id="forgotPasswordModal" class="mfa-overlay" role="dialog" aria-modal="true" aria-label="Wachtwoord opnieuw instellen">
+  <div class="login-box mfa-box" style="max-width:360px">
+    <div class="login-logo">Wachtwoord vergeten</div>
+    <div class="login-sub">Vul je e-mailadres in. Als dit adres bekend is, ontvang je een link om een nieuw wachtwoord in te stellen.</div>
+    <label class="login-label" for="forgotEmail" style="display:block">E-mailadres</label>
+    <input class="login-inp" type="email" id="forgotEmail" autocomplete="email" placeholder="naam@heidelbergmaterials.com" onkeydown="if(event.key==='Enter')submitForgotPassword()">
+    <button class="login-btn" id="forgotBtn" onclick="submitForgotPassword()">Verstuur resetlink</button>
+    <div class="login-err" id="forgotError"></div>
+    <button class="logout-btn" style="margin-top:10px" onclick="closeForgotPassword()">Annuleren</button>
+  </div>
+</div>
+
+<!-- Wachtwoord opnieuw instellen: geopend via de resetlink uit de e-mail
+     (Supabase geeft daarbij een tijdelijk access_token mee in de URL-hash). -->
+<div id="resetPasswordModal" class="mfa-overlay" role="dialog" aria-modal="true" aria-label="Nieuw wachtwoord instellen">
+  <div class="login-box mfa-box" style="max-width:360px">
+    <div class="login-logo">Nieuw wachtwoord</div>
+    <div class="login-sub">Kies een nieuw wachtwoord van minimaal 12 tekens.</div>
+    <label class="login-label" for="resetPassword1" style="display:block">Nieuw wachtwoord</label>
+    <input class="login-inp" type="password" id="resetPassword1" autocomplete="new-password" placeholder="••••••••••••">
+    <label class="login-label" for="resetPassword2" style="display:block">Herhaal wachtwoord</label>
+    <input class="login-inp" type="password" id="resetPassword2" autocomplete="new-password" placeholder="••••••••••••" onkeydown="if(event.key==='Enter')submitPasswordReset()">
+    <button class="login-btn" id="resetBtn" onclick="submitPasswordReset()">Wachtwoord instellen</button>
+    <div class="login-err" id="resetError"></div>
+  </div>
+</div>
+
+<!-- Twee-factor: code invoeren voor toegang tot Financiën (step-up) -->
+<div id="financeMfaModal" class="mfa-overlay" role="dialog" aria-modal="true" aria-label="Financiën ontgrendelen met twee-factor code">
+  <div class="login-box mfa-box" style="max-width:360px">
+    <div class="login-logo">&#128274; Financiën</div>
+    <div class="login-sub">Dit onderdeel is beveiligd met twee-factor authenticatie. Voer de 6-cijferige code uit je authenticator-app in.</div>
+    <input class="login-inp" id="financeMfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" onkeydown="if(event.key==='Enter')submitFinanceMfa()">
+    <button class="login-btn" id="financeMfaBtn" onclick="submitFinanceMfa()">Ontgrendelen</button>
+    <div class="login-err" id="financeMfaError"></div>
+    <button class="logout-btn" style="margin-top:10px" onclick="cancelFinanceMfa()">Annuleren</button>
+  </div>
+</div>
+
+<!-- Twee-factor: instellen (enrollment) -->
+<div id="mfaEnrollModal" class="mfa-overlay" role="dialog" aria-modal="true" aria-label="Twee-factor authenticatie instellen">
+  <div class="login-box mfa-box" style="max-width:380px">
+    <div class="login-logo">2FA instellen</div>
+    <div class="login-sub" id="mfaEnrollReason" style="display:none;color:#d29922;font-weight:600">&#128274; Financiën vereist twee-factor authenticatie. Stel het hieronder eenmalig in.</div>
+    <div class="login-sub">Scan de QR-code met Google/Microsoft Authenticator of 1Password.</div>
+    <div id="mfaQr" class="mfa-qr"></div>
+    <a id="mfaOtpLink" class="login-btn mfa-otp-link" href="#" style="display:none;background:#21262d">&#128241; Op deze telefoon? Open direct in de app</a>
+    <div class="login-label" style="margin-top:12px">Of voer deze sleutel handmatig in:</div>
+    <div style="display:flex;gap:8px;align-items:stretch">
+      <div id="mfaSecret" style="flex:1;min-width:0;font-family:monospace;font-size:13px;word-break:break-all;background:var(--color-card);padding:8px;border-radius:6px;color:var(--color-text-primary)"></div>
+      <button type="button" class="logout-btn" style="flex:0 0 auto" onclick="copyMfaSecret()" title="Kopieer sleutel">&#128203;</button>
+    </div>
+    <div class="login-label" style="margin-top:12px">Bevestig met de 6-cijferige code</div>
+    <input class="login-inp" id="mfaEnrollCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+    <button class="login-btn" onclick="submitMfaEnroll()">Bevestigen</button>
+    <div class="login-err" id="mfaEnrollError"></div>
+    <button class="logout-btn" style="margin-top:10px" onclick="closeMfaEnroll()">Sluiten</button>
+  </div>
+</div>
+
+<div id="appShell" style="display:none">
+<div class="topbar">
+  <div class="topbar-left">
+    <button type="button" class="logo logo-btn" onclick="showPage('home');closeMobileNav()" title="Naar Start">SAP PM <span>Dashboard</span></button>
+    <!-- De pagina-navigatie (Start/Dashboard/Backlog/Analyse/Financiën) is
+         verplaatst naar de Start-pagina (modulekaarten) en Ctrl+K — dit is
+         nu alleen nog de plek waar Financiën zijn eigen knop in zet (blijft
+         bewust bestaan voor die integratie, maar staat verborgen: zie
+         .nav{display:none} in app.css) en waar de contextuele
+         Onderhoud-subnav hieronder zijn actieve status leest. -->
+    <nav class="nav" id="mainNav">
+      <button class="nt active" id="navHome" onclick="showPage('home');closeMobileNav()">Start</button>
+      <button class="nt" id="navDash" onclick="showPage('dashboard');closeMobileNav()">Dashboard</button>
+      <button class="nt" id="navBacklog" onclick="showPage('backlog');closeMobileNav()">Backlog</button>
+      <button class="nt" id="navAnalyse" onclick="showPage('analyse');closeMobileNav()">Analyse</button>
+      <span id="wkTabs"></span>
+      <button class="nt add" id="navAdd" onclick="showPage('addweek');closeMobileNav()" style="margin-left:auto">+ Week toevoegen</button>
+    </nav>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center">
+    <input type="file" id="topUpload" accept=".xlsx,.xls" style="display:none" onchange="handleExcelUpload(this)">
+    <button class="logout-btn cmdk-btn" onclick="openCommandPalette()" title="Snel zoeken en navigeren (Ctrl+K)" aria-label="Snel zoeken en navigeren, sneltoets Control K"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>Zoeken <span class="cmdk-kbd">Ctrl K</span></button>
+    <div class="acct-menu-wrap">
+      <button class="logout-btn" id="acctMenuBtn" onclick="toggleAcctMenu()" aria-haspopup="true" aria-expanded="false">Account &#9662;</button>
+      <div class="acct-menu" id="acctMenu" style="display:none" role="menu">
+        <div class="acct-menu-email" id="acctMenuEmail"></div>
+        <button class="admin-only" role="menuitem" id="gebruikerTab" onclick="closeAcctMenu();showPage('gebruikers');closeMobileNav()" style="display:none">&#128100; Gebruikers</button>
+        <button class="admin-only" role="menuitem" id="auditLogTab" onclick="closeAcctMenu();showPage('auditlog');closeMobileNav()" style="display:none">&#128220; Audit-log</button>
+        <button role="menuitem" onclick="closeAcctMenu();openMfaEnroll()">&#128273; Twee-factor (2FA)</button>
+        <button role="menuitem" onclick="closeAcctMenu();wijzigWachtwoord()">&#128274; Wachtwoord wijzigen</button>
+        <div class="acct-menu-sep"></div>
+        <button role="menuitem" onclick="signOut()">&#8618; Uitloggen</button>
+      </div>
+    </div>
+    <button class="ham-btn" id="hamBtn" aria-label="Menu" aria-expanded="false" onclick="toggleMobileNav()"><span class="ham-line"></span><span class="ham-line"></span><span class="ham-line"></span></button>
+  </div>
+</div>
+<!-- Contextuele Onderhoud-navigatie: alleen zichtbaar op de onderhoudpagina's
+     zelf (Dashboard/Backlog/Analyse/Week toevoegen/weekpagina's/rapport),
+     via syncOnderhoudSubnav() in legacy-app.js. Vervangt de permanente
+     topbar-nav — Start en Ctrl+K zijn nu de hoofdroutes, dit is alleen de
+     "verderklikken binnen Onderhoud"-laag zodra je daar al bent. -->
+<div class="subnav" id="onderhoudSubnav" style="display:none">
+  <button class="sn-item" data-snid="dashboard" onclick="showPage('dashboard')">Dashboard</button>
+  <button class="sn-item" data-snid="backlog" onclick="showPage('backlog')">Backlog</button>
+  <button class="sn-item" data-snid="analyse" onclick="showPage('analyse')">Analyse</button>
+  <button class="sn-item sn-add" data-snid="addweek" onclick="showPage('addweek')">+ Week toevoegen</button>
+</div>
+<div id="globalStatus" role="status" aria-live="polite"></div>
+
+<div class="main">
+  <div class="pg active" id="pg-dashboard">
+    <div class="whr">
+      <div><div class="wt">Dashboard</div><div class="ws">Weekplanning &amp; uitvoering van het onderhoud — filter op week of type, of zoek een werkorder</div></div>
+      <button class="btn" onclick="openWeekRapport()" title="Automatisch managementrapport over de laatste week — printbaar als PDF"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>Weekrapport</button>
+    </div>
+    <div class="fr">
+      <label>Week:</label>
+      <select id="fWeek" onchange="renderDash()">
+        <option value="all">Alle weken</option>
+      </select>
+      <label>Type:</label>
+      <select id="fType" onchange="renderDash()">
+        <option value="all">Gepland + ongepland</option>
+        <option value="gepland">Alleen gepland</option>
+        <option value="ongepland">Alleen ongepland</option>
+      </select>
+      <span class="search-wrap"><input type="text" id="fSearch" class="search-inp" placeholder="Zoek op ordernummer of omschrijving..." oninput="renderDash()"><button type="button" class="search-clear" title="Zoekopdracht wissen" onclick="document.getElementById('fSearch').value='';renderDash()">&times;</button></span>
+    </div>
+    <div class="kg" id="dKpis"></div>
+
+  <!-- KPI-detail: klapt in-place open onder de KPI-rij (zelfde patroon als
+       de Financiën-KPI's) i.p.v. naar een aparte pagina te navigeren — een
+       klik op bv. "Niet uitgevoerd" scrollt hier automatisch naartoe. -->
+  <div class="kpi-detail-panel" id="pg-kpi-detail" style="display:none">
+    <div class="whr">
+      <div><div class="wt" id="kpiDetTitle">KPI-detail</div><div class="ws" id="kpiDetSub"></div></div>
+      <button class="btn" onclick="closeKpiDetail()">Sluiten &#10005;</button>
+    </div>
+    <div id="kpiDetExtra"></div>
+    <div class="fr">
+      <span class="search-wrap"><input type="text" id="kpiDetSearch" class="search-inp" placeholder="Zoek op ordernummer of omschrijving..." oninput="renderKpiDetail()"><button type="button" class="search-clear" title="Zoekopdracht wissen" onclick="document.getElementById('kpiDetSearch').value='';renderKpiDetail()">&times;</button></span>
+    </div>
+    <div id="kpiDetTbl"></div>
+  </div>
+
+<!-- Reden Analyse -->
+<div class="reden-table">
+  <span class="info-i" data-tip="Telt voor alle werkorders die niet (volledig) zijn uitgevoerd hoe vaak elke reden is opgegeven, gesorteerd van meest naar minst voorkomend.">i</span>
+  <div class="reden-title" onclick="showPage('analyse')" style="cursor:pointer;justify-content:space-between" title="Klik om de volledige analyse te openen"><span style="display:flex;align-items:center;gap:8px"><span class="cc-icon" style="--accent:#da3633"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12" y2="16"/></svg></span>Niet uitgevoerd — meest voorkomende redenen<span id="redenScopeLabel" style="font-weight:400;color:#8b949e"></span></span><span style="font-size:12px;color:#8b949e;font-weight:400">Klik voor analyse &rsaquo;</span></div>
+  <div class="tw keep-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Reden</th>
+          <th style="width:60px;text-align:right">Aantal</th>
+          <th style="width:120px">%</th>
+        </tr>
+      </thead>
+      <tbody id="redenTableBody">
+        <tr><td><div class="sk sk-row" style="width:70%"></div></td><td><div class="sk sk-row" style="width:40%;margin-left:auto"></div></td><td><div class="sk sk-row" style="width:80%"></div></td></tr>
+        <tr><td><div class="sk sk-row" style="width:55%"></div></td><td><div class="sk sk-row" style="width:40%;margin-left:auto"></div></td><td><div class="sk sk-row" style="width:60%"></div></td></tr>
+        <tr><td><div class="sk sk-row" style="width:65%"></div></td><td><div class="sk sk-row" style="width:40%;margin-left:auto"></div></td><td><div class="sk sk-row" style="width:45%"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+    <div class="cr">
+      <div class="cc" style="--accent:#238636">
+        <span class="info-i" data-tip="Toont per week het aantal geplande en ongeplande werkorders, zodat je trends in de verhouding tussen regulier en spoedonderhoud kan zien.">i</span>
+        <div class="cct"><span class="cc-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg></span><span class="lc-title">WO's per week — gepland vs. ongepland</span></div>
+        <div class="leg">
+          <span><span class="ld" style="background:#2ea043"></span>Gepland</span>
+          <span><span class="ld" style="background:#3fb950;border:1px dashed #3fb950;background:transparent"></span>Ongepland</span>
+        </div>
+        <div class="chart-container chart-h220"><canvas id="lc" role="img" aria-label="Lijngrafiek: aantal geplande en ongeplande werkorders per week"></canvas></div>
+      </div>
+      <div class="cc" style="--accent:#1f7a4d">
+        <span class="info-i" data-tip="Gestapelde balk per week: aantal werkorders met status Ja (groen), Nee (rood) en Deels/UC (oranje).">i</span>
+        <div class="cct"><span class="cc-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="6" y1="20" x2="6" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg></span><span class="bc-title">Uitvoering per week</span></div>
+        <div class="leg">
+          <span><span class="ld" style="background:#2ea043"></span>Ja</span>
+          <span><span class="ld" style="background:repeating-linear-gradient(45deg,#da3633 0 3px,#eda2a2 3px 4.5px)"></span>Nee</span>
+          <span><span class="ld" style="background:#d29922;background-image:radial-gradient(rgba(255,255,255,.65) 1px,transparent 1.2px);background-size:4px 4px"></span>Deels/UC</span>
+        </div>
+        <div class="chart-container chart-h220"><canvas id="bc" role="img" aria-label="Staafgrafiek: uitvoering per week — aantal werkorders met status Ja, Nee en Deels/UC"></canvas></div>
+      </div>
+    </div>
+    <div class="cc" style="margin-bottom:20px;--accent:#d29922">
+      <span class="info-i" data-tip="De lijn toont het uitvoeringspercentage per week (afgerond ÷ totaal van die week). De tweede lijn toont het cumulatieve aantal afgeronde werkorders, opgeteld over de weken heen.">i</span>
+      <div class="cct"><span class="cc-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span><span class="pc-title">Uitvoeringspercentage per week</span></div>
+      <div class="chart-container chart-h170"><canvas id="pc" role="img" aria-label="Lijngrafiek: uitvoeringspercentage per week en cumulatief aantal afgeronde werkorders"></canvas></div>
+    </div>
+    <div class="sl">Werkorders overzicht</div>
+    <div id="dTbl"></div>
+  </div>
+
+  <div class="pg" id="pg-backlog">
+    <div class="whr">
+      <div><div class="wt">Backlog — unieke werkorders</div><div class="ws">Per ordernummer wordt de laatste bekende status getoond, onafhankelijk van hoe vaak de WO terugkomt</div></div>
+    </div>
+    <div class="kg" id="bKpis"></div>
+    <div class="fr">
+      <label>Toon:</label>
+      <select id="bFilter" onchange="renderBacklog()">
+        <option value="open">Alleen openstaand (Nee/Deels/UC)</option>
+        <option value="risico">Alleen hoog risico</option>
+        <option value="long">\u2265 3 weken open</option>
+        <option value="all">Alle unieke WO's</option>
+        <option value="ja">Alleen afgerond</option>
+      </select>
+      <span class="search-wrap"><input type="text" id="bSearch" class="search-inp" placeholder="Zoek op ordernummer of omschrijving..." oninput="renderBacklog()"><button type="button" class="search-clear" title="Zoekopdracht wissen" onclick="document.getElementById('bSearch').value='';renderBacklog()">&times;</button></span>
+    </div>
+    <div id="bTbl"></div>
+  </div>
+
+  <div class="pg" id="pg-addweek">
+    <div class="whr">
+      <div><div class="wt">Week toevoegen</div><div class="ws">Handmatig invullen of Excel uploaden rechts bovenaan</div></div>
+    </div>
+    <div id="uploadStatus"></div>
+    <div class="uz" onclick="document.getElementById('topUpload').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div class="uz-title">Klik om een Excel te uploaden</div>
+      <div class="uz-sub">Hetzelfde format als je weekplanning — wordt automatisch verwerkt</div>
+    </div>
+    <div class="wf">
+      <div class="sl" style="margin-top:0">Of handmatig invullen</div>
+      <div class="grid-3">
+        <div><label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px">Jaar</label><input type="number" id="nYear" value="2026" class="inp"></div>
+        <div><label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px">Weeknummer</label><input type="number" id="nWk" min="1" max="53" value="" class="inp" placeholder="bijv. 24"></div>
+        <div><label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px">Periode</label><input type="text" id="nLbl" class="inp" placeholder="bijv. 8–12 juni 2026"></div>
+      </div>
+      <div class="row-grid" style="margin-bottom:4px">
+        <span class="col-hdr">Dag</span><span class="col-hdr">Order</span><span class="col-hdr">Omschrijving</span>
+        <span class="col-hdr">Uitvoerende(n)</span><span class="col-hdr">Type</span><span class="col-hdr">Uitgevoerd</span><span></span>
+      </div>
+      <div id="nRows"></div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn" onclick="addRow()">+ Rij toevoegen</button>
+        <button class="btn btn-p" onclick="saveWeek()">&#10003; Opslaan</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pg" id="pg-analyse">
+    <div class="whr">
+      <div><div class="wt">Analyse — niet uitgevoerd</div><div class="ws">Waarom werk niet is uitgevoerd, per reden en per installatie</div></div>
+      <button class="btn" onclick="showPage('dashboard')">&#8592; Terug naar dashboard</button>
+    </div>
+
+    <!-- Meest voorkomende reden: bovenaan, want dit is waar planners het eerst
+         naar kijken. Eén pulldown i.p.v. een lijst met balkjes — direct
+         selecteerbaar zonder te hoeven scrollen, met grote kerncijfers ernaast. -->
+    <div class="wf">
+      <div class="sl" style="margin-top:0">Meest voorkomende reden voor niet-uitvoering</div>
+      <div class="ws" style="margin-bottom:14px">Kies een reden om te zien welke werkorders erdoor zijn geraakt.</div>
+      <div class="an-reden-toolbar">
+        <label class="an-reden-lbl">Reden
+          <select id="aRedenSelect" class="inp" onchange="showRedenDetailPanel(this.selectedIndex)"></select>
+        </label>
+        <div class="an-stats" id="aRedenStats"></div>
+      </div>
+      <div id="aRedenDetail"></div>
+    </div>
+
+    <div class="wf">
+      <div class="sl" style="margin-top:0">Installaties met de meeste problemen</div>
+      <div class="ws" style="margin-bottom:14px">Niet-uitgevoerde werkorders en storingen, per installatie.</div>
+      <div class="analyse-cols">
+        <div><div id="aInstallatieList"></div></div>
+        <div id="aInstallatieDetail">
+          <div class="empty" style="padding:40px 20px">
+            <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9h.01M9 9a3 3 0 1 1 3 3M12 12v3m0 3h.01"/><circle cx="12" cy="12" r="9"/></svg></div>
+            <div class="empty-title">Selecteer een installatie</div>
+            <div class="empty-sub">Klik op een installatie links om de bijbehorende werkorders te zien</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Automatische signalen (voorheen "Inzichten"): helemaal onderaan —
+         ondersteunend, niet het eerste waar de blik op valt. -->
+    <div class="wf">
+      <div class="sl" style="margin-top:0">Automatische signalen</div>
+      <div class="ws" style="margin-bottom:14px">Patronen die het systeem zelf herkent in de planning.</div>
+      <div id="aInzichten"></div>
+    </div>
+  </div>
+
+  <div id="wkPages"></div>
+
+  <div class="pg" id="pg-gebruikers">
+    <div class="whr">
+      <div><div class="wt">Gebruikersbeheer</div><div class="ws">Alleen zichtbaar voor admins — voeg gebruikers toe of verwijder ze</div></div>
+      <button class="btn btn-p" onclick="loadGebruikers()">&#8635; Vernieuwen</button>
+    </div>
+
+    <!-- Nieuwe gebruiker toevoegen -->
+    <div class="wf" style="margin-bottom:20px">
+      <div class="sl" style="margin-top:0">Nieuwe gebruiker uitnodigen</div>
+      <p style="font-size:13px;color:#8b949e;margin-bottom:14px">Maak een account aan en geef de inloggegevens door aan de collega. Zij kunnen het wachtwoord daarna zelf wijzigen.</p>
+      <div class="grid-3-auto">
+        <div>
+          <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px">Naam</label>
+          <input type="text" id="newUserNaam" class="inp" placeholder="Voornaam Achternaam">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px">E-mailadres</label>
+          <input type="email" id="newUserEmail" class="inp" placeholder="naam@bedrijf.com">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px">Rol</label>
+          <select id="newUserRol" class="inp" style="cursor:pointer">
+            <option value="viewer">Viewer</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <button class="btn btn-p" onclick="voegGebruikerToe()" style="white-space:nowrap">+ Toevoegen</button>
+      </div>
+      <div id="gebruikerStatus" style="margin-top:12px;font-size:13px;min-height:20px"></div>
+    </div>
+
+    <!-- Gebruikerslijst -->
+    <div class="sl">Bestaande gebruikers</div>
+    <div class="tw" id="gebruikersLijst">
+      <div style="padding:2rem;text-align:center;color:#8b949e">Gebruikers laden&hellip;</div>
+    </div>
+  </div>
+
+  <div class="pg" id="pg-auditlog">
+    <div class="whr">
+      <div><div class="wt">Audit-log</div><div class="ws">Alleen zichtbaar voor admins — wie heeft welke beheerdersactie uitgevoerd</div></div>
+      <button class="btn btn-p" onclick="loadAuditLog()">&#8635; Vernieuwen</button>
+    </div>
+    <div class="tw" id="auditLogLijst">
+      <div style="padding:2rem;text-align:center;color:#8b949e">Audit-log laden&hellip;</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script src="js/legacy-app.js"></script>
+<script src="js/home.js"></script>
+<script src="js/palette.js"></script>
+<script src="js/report.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

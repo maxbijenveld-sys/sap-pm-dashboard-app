@@ -1,0 +1,238 @@
+/* Financiënmodule — eigen styles, los van de onderhoud-UI.
+   Zelfde tokensysteem als het dashboard (css/app.css) zodat het als één
+   systeem voelt — geen losse hex meer, zie docs/DESIGN_SYSTEM.md. */
+
+/* Kaart */
+.fin-card { background:var(--color-card); border:1px solid var(--color-border-muted); border-radius:var(--radius-lg); padding:20px; margin-bottom:24px; box-shadow:var(--shadow-1); }
+.fin-card-title { font-size:var(--fs-h3); font-weight:600; color:var(--color-text-primary); margin-bottom:12px; }
+
+/* Upload-zone */
+.fin-uz { border:2px dashed var(--color-border); border-radius:10px; padding:28px; text-align:center; cursor:pointer; color:var(--color-text-secondary); transition:border-color .2s, background .2s, color .2s; }
+.fin-uz:hover { border-color:var(--color-primary); background:var(--color-card-hover); color:var(--color-success); }
+.fin-uz-title { font-size:14px; font-weight:500; margin-bottom:4px; }
+.fin-uz-sub { font-size:12px; }
+
+/* Notities / meldingen */
+.fin-note { font-size:12px; color:var(--color-text-secondary); background:var(--color-surface); border-radius:8px; padding:8px 12px; margin-top:10px; border-left:3px solid var(--color-border); }
+.fin-note.fin-err { background:#3a1414; border-color:var(--color-danger-strong); color:#ff8a8a; }
+.fin-note.fin-warn { background:#3a3014; border-color:var(--color-warning); color:#f0c27a; }
+.fin-note.fin-ok { background:#12261a; border-color:var(--color-success); color:#56d364; }
+
+/* KPI-grid */
+.fin-kg { display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:12px; margin:16px 0; }
+.fin-kpi { position:relative; background:var(--color-card); border:1px solid var(--color-border-muted); border-radius:var(--radius-md); padding:12px 14px; border-left:4px solid var(--kpi,var(--color-border)); overflow:hidden; transition:background-color .15s,border-color .15s,box-shadow .15s; }
+/* Klikbare KPI (alleen op het Overzicht-tab, met data-kpi): opent eronder
+   het detailpaneel met uitleg, bron, berekening en opbouw. */
+.fin-kpi[data-kpi] { cursor:pointer; }
+.fin-kpi[data-kpi]:hover { background:var(--color-card-hover); border-color:var(--color-border); border-left-color:var(--kpi,var(--color-border)); box-shadow:var(--shadow-2); }
+.fin-kpi.active { background:color-mix(in srgb, var(--kpi,var(--color-primary)) 14%, var(--color-card)); border-color:var(--color-border); border-left-color:var(--kpi,var(--color-primary)); }
+.fin-sl-hint { font-weight:400; text-transform:none; letter-spacing:0; color:var(--color-text-muted); }
+
+/* Hero-KPI: zelfde principe als .kc-hero op het onderhoud-dashboard — één
+   stuurgetal per scherm krijgt nadruk via gewicht (grotere kleur-wash,
+   vollere linkerrand), niet via een apart grid. Financiën had dit nog
+   niet: alle KPI's stonden even zwaar, zonder duidelijk eerste-blik-punt.
+   Bugfix: eerst hergebruikte dit --fs-hero (30px, getuned voor de bredere
+   6-koloms grid van het onderhoud-dashboard) — in Financiën' dichtere rij
+   van 6-9 KPI's naast elkaar drukte het cijfer daardoor tegen de rand van
+   de kaart. Eigen, bescheidener maat die wél in een smallere kolom past;
+   de kleur-wash en de dikkere rand doen het meeste van het nadruk-werk. */
+.fin-kpi.fin-kpi-hero { background:linear-gradient(135deg,color-mix(in srgb,var(--kpi,var(--color-primary)) 14%,var(--color-card)),var(--color-card) 80%); border-left-width:5px; }
+.fin-kpi.fin-kpi-hero .fin-kpi-v { font-size:23px; letter-spacing:-.01em; }
+
+/* Toolbar boven de KPI-kaarten: personaliseren (links) + periodevergelijking
+   (rechts), naast elkaar maar los van elkaar te bedienen. */
+.fin-kpi-toolbar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.fin-kpi-toolbar .fin-kpi-config-toolbar { margin-bottom:0; }
+.fin-compare-lbl { font-size:12px; color:var(--color-text-secondary); display:flex; align-items:center; gap:8px; white-space:nowrap; }
+.fin-compare-lbl select { min-width:150px; }
+
+/* Periodevergelijking per KPI-kaart: alleen bij kostenposten kleur (meer
+   kosten = rood, minder = groen); bij budget/volume/projecten is "meer"
+   niet per se goed of slecht (YTD-versies groeien vanzelf), dus neutraal. */
+.fin-kpi-delta { font-size:11px; margin-top:8px; padding-top:8px; border-top:1px solid var(--color-border-muted); display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-weight:600; }
+.fin-kpi-delta-up { color:var(--color-danger); }
+.fin-kpi-delta-down { color:var(--color-success); }
+.fin-kpi-delta-neutral, .fin-kpi-delta-flat { color:var(--color-text-secondary); }
+.fin-kpi-delta-vs { color:var(--color-text-muted); font-weight:400; }
+@media(max-width:640px){ .fin-kpi-toolbar { flex-direction:column; align-items:stretch; } }
+
+/* KPI-detailpaneel: de informatie achter het getal. Container krijgt een
+   DONKERDERE achtergrond dan de infoblokken erin (i.p.v. andersom, zoals
+   voorheen) zodat de blokken er duidelijk "opgetild" bovenuit steken i.p.v.
+   in elkaar over te lopen — plus een kleuraccent van de aangeklikte KPI
+   zodat helder is welk paneel bij welke kaart hoort. */
+/* scroll-margin-top: houdt rekening met de sticky topbar (52px) + wat
+   lucht, zodat automatisch scrollen (zie financeDashboard.js: renderKpis)
+   het paneel niet exact onder de balk laat wegduiken. */
+.fin-kd { position:relative; background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:16px; margin-top:4px; box-shadow:var(--shadow-2); overflow:hidden; scroll-margin-top:68px; }
+.fin-kd::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--kpi,var(--color-primary)); opacity:.9; }
+.fin-kd-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.fin-kd-title { font-size:15px; font-weight:600; color:var(--color-text-primary); letter-spacing:-.01em; }
+.fin-kd-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+.fin-kd-block { background:var(--color-card-hover); border:1px solid var(--color-border); border-radius:10px; padding:12px; box-shadow:var(--shadow-1); }
+.fin-kd-h { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--color-text-secondary); margin-bottom:6px; }
+.fin-kd-b { font-size:12.5px; color:var(--color-text-primary); line-height:1.55; }
+.fin-kd-b strong { color:var(--color-text-primary); font-weight:700; }
+.fin-kd-tt { font-size:12px; font-weight:600; color:var(--color-text-primary); margin-top:14px; }
+.fin-kd .tw { margin-bottom:0; }
+@media(max-width:640px){ .fin-kd-grid { grid-template-columns:1fr; } }
+.fin-kpi-cat { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--kpi,var(--color-text-secondary)); opacity:.9; margin-bottom:6px; }
+.fin-kpi-l { font-size:11px; color:var(--color-text-secondary); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
+.fin-kpi-v { font-size:20px; font-weight:600; color:#fff; letter-spacing:-.02em; }
+.fin-kpi-s { font-size:11px; color:var(--color-text-secondary); margin-top:3px; }
+/* "RBM per blok"-kaart: drie kolommen (goedgekeurd/geïdentificeerd/
+   onvoorzien) i.p.v. één groot cijfer. Eén gewone KPI-breedte (168px) is
+   te smal voor drie geldbedragen naast elkaar (labels knepen af, bedragen
+   liepen in elkaar) — deze ene kaart claimt daarom twee sporen in het
+   grid. Het grid heeft altijd ≥2 sporen (mobiel: repeat(2,1fr)), dus
+   span 2 loopt nergens uit zijn container. */
+.fin-kpi[data-kpi="rbmBlokken"] { grid-column: span 2; }
+/* auto-sporen + space-between: elke kolom wordt zo breed als zijn bedrag,
+   dus bedragen kunnen elkaar nooit meer overlappen zoals bij 1fr-sporen. */
+.fin-kpi-cols { display:grid; grid-template-columns:repeat(3,auto); justify-content:space-between; gap:14px; }
+.fin-kpi-col { display:flex; flex-direction:column; min-width:0; }
+.fin-kpi-col-l { font-size:10px; color:var(--color-text-secondary); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+.fin-kpi-col-v { font-size:15px; font-weight:600; color:#fff; letter-spacing:-.01em; margin-top:2px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.fin-kpi-col-s { font-size:10px; color:var(--color-text-muted); margin-top:1px; }
+.fin-kpi-col-a { font-size:10px; color:var(--color-success); margin-top:3px; font-weight:600; }
+.fin-kpi-col-a-none { color:var(--color-text-muted); font-weight:400; }
+
+/* Uitklap-specificatie (budgetcategorie/kostensoort onder een tabelrij).
+   Duidelijk afgezet paneel i.p.v. cellen die in de tabel wegvallen: eigen
+   verhoogd oppervlak, accentlijn links, labels een maat groter en lichter
+   dan de standaard secundaire tekst (dit is inhoud, geen bijschrift). */
+.fin-spec { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px 20px; padding:14px 16px; margin:10px 8px; background:var(--color-card-hover); border:1px solid var(--color-border); border-left:3px solid var(--color-primary); border-radius:8px; }
+.fin-spec-l { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:#a9b3bd; margin-bottom:4px; }
+.fin-spec-v { font-size:16px; font-weight:600; color:#fff; letter-spacing:-.01em; }
+.fin-spec-v.fin-spec-over { color:var(--color-danger); }
+.fin-spec-v.fin-spec-under { color:var(--color-success); }
+
+/* Budgetstatus (manager-overzicht) */
+
+.fin-bs-headline { font-size:16px; font-weight:500; line-height:1.55; color:var(--color-text-secondary); padding:14px 16px; border-radius:12px; background:var(--color-surface); border-left:4px solid var(--color-primary); margin-bottom:16px; }
+.fin-bs-headline.fin-bs-over { border-left-color:var(--color-danger-strong); }
+.fin-bs-headline strong { color:var(--color-text-primary); }
+/* Balk = buitenste laag zónder overflow (zodat de prognose-marker en zijn
+   label erbuiten mogen steken); de track knipt alleen de segmenten af op de
+   afgeronde hoeken. Voorheen stond overflow:hidden op .fin-bar zelf, waardoor
+   de marker + het "prognose"-label onzichtbaar werden weggeknipt. */
+.fin-bar { position:relative; height:26px; }
+.fin-bar-track { display:flex; height:100%; border-radius:8px; overflow:hidden; background:var(--color-surface); border:1px solid var(--color-border); }
+.fin-bar-seg { height:100%; transition:width .3s; }
+.fin-bar-marker { position:absolute; top:-6px; bottom:-6px; width:0; border-left:2px dashed var(--color-text-primary); }
+.fin-bar-marker span { position:absolute; top:-16px; left:2px; font-size:10px; color:var(--color-text-primary); white-space:nowrap; }
+.fin-bs-legend { display:flex; flex-wrap:wrap; gap:16px; margin-top:22px; font-size:12px; color:var(--color-text-secondary); }
+.fin-bs-legend i { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+.fin-bs-budget { margin-left:auto; color:var(--color-text-secondary); }
+.fin-bs-ytd { margin-top:14px; padding:11px 14px; border-radius:10px; font-size:14px; line-height:1.5; color:var(--color-text-secondary); background:var(--color-card); border:1px solid var(--color-border-muted); }
+.fin-bs-ytd.fin-bs-over { border-color:#5b2b2b; background:#2a1c1c; }
+.fin-bs-ytd strong { color:var(--color-text-primary); }
+.fin-bs-tt { margin:18px 0 8px; font-size:13px; font-weight:600; color:var(--color-text-primary); }
+.fin-over { color:var(--color-danger); font-weight:600; }
+.fin-under { color:var(--color-success); font-weight:600; }
+.fin-flat { color:var(--color-text-secondary); }
+/* Eén gekleurde pil per kernzin voor de belangrijkste conclusie ("nog vrij" /
+   "over budget") — de rest van de zin blijft neutraal, zodat dit ene ding
+   in één oogopslag opvalt zonder de hele zin te hoeven lezen. */
+.fin-highlight { display:inline-block; padding:1px 9px; border-radius:999px; font-weight:600; }
+.fin-highlight.ok { color:var(--color-success); background:rgba(52,211,153,.16); }
+.fin-highlight.over { color:var(--color-danger); background:rgba(220,38,38,.14); }
+
+/* Tabel */
+.fin-tbl { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+.fin-tbl th { text-align:left; font-size:11px; font-weight:600; color:var(--color-text-secondary); padding:8px 10px; border-bottom:1px solid var(--color-border); }
+.fin-tbl td { padding:7px 10px; border-bottom:1px solid var(--color-border-muted); color:var(--color-text-primary); }
+.fin-tbl tr:last-child td { border-bottom:none; }
+
+/* Bevestig-rij */
+.fin-confirm-row { display:flex; align-items:center; gap:14px; margin-top:14px; flex-wrap:wrap; }
+.fin-lbl { font-size:12px; color:var(--color-text-secondary); display:flex; align-items:center; gap:8px; }
+.fin-inp { font-size:13px; padding:6px 10px; border-radius:8px; border:1px solid var(--color-border); background:var(--color-secondary); color:var(--color-text-primary); }
+
+/* Dashboard */
+.fin-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--color-border); }
+.fin-toolbar-btns { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* Subtabs: Overzicht / Analyse / Bronnen & uitleg */
+.fin-tabs { display:flex; gap:6px; flex-wrap:wrap; }
+.fin-tab { font-size:13px; padding:8px 18px; border-radius:8px; border:1px solid var(--color-border); background:var(--color-card); color:var(--color-text-secondary); cursor:pointer; font-weight:500; }
+.fin-tab:hover { background:var(--color-card-hover); color:var(--color-text-primary); }
+/* "Actief" = --color-primary, niet --color-success (zie .dt2.active in app.css). */
+.fin-tab.active { background:color-mix(in srgb, var(--color-primary) 18%, var(--color-card)); color:var(--color-primary-hover); border-color:var(--color-primary); font-weight:600; }
+@media(max-width:640px){ .fin-tab { flex:1; text-align:center; padding:10px 8px; min-height:44px; } }
+.fin-sub { font-size:12px; color:var(--color-text-secondary); margin-bottom:10px; }
+.fin-kpi-config-toolbar { display:flex; justify-content:flex-end; margin-bottom:12px; }
+.fin-kpi-config-panel { background:var(--color-surface-elevated); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:14px; margin-top:10px; }
+.fin-kpi-config { display:grid; gap:10px; }
+.fin-kpi-config-row { display:grid; gap:4px; padding:10px 12px; border-radius:12px; background:var(--color-card); border:1px solid var(--color-border-muted); }
+.fin-kpi-config-left { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.fin-kpi-config-left label { cursor:pointer; color:var(--color-text-primary); }
+.fin-kpi-config-sub { font-size:11px; color:var(--color-text-secondary); }
+.fin-kpi-config-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+.fin-kpi-order { width:30px; height:30px; border:none; border-radius:8px; background:var(--color-secondary); color:var(--color-text-secondary); cursor:pointer; }
+.fin-kpi-order:hover { background:var(--color-secondary-hover); }
+.fin-two { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+.fin-chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.fin-card > .sl { margin-bottom:12px; }
+.btn.active { background:var(--color-primary); color:#fff; border-color:var(--color-primary); }
+
+/* Onderdelen & samenhang (bron-kaarten + flow + reconciliatie) */
+.fin-src-intro { font-size:12px; color:var(--color-text-secondary); margin-bottom:12px; }
+.fin-src-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+.fin-src-card { position:relative; padding:14px; border-radius:var(--radius-lg); background:var(--color-card); border:1px solid var(--color-border-muted); border-left:4px solid var(--src,var(--color-border)); transition:background-color .15s; }
+.fin-src-card:hover { background:var(--color-card-hover); }
+.fin-src-tab { font-family:monospace; font-size:11px; color:var(--src,var(--color-text-secondary)); background:rgba(255,255,255,0.05); display:inline-block; padding:2px 7px; border-radius:var(--radius-xs); margin-bottom:8px; }
+.fin-src-naam { font-size:13px; font-weight:600; color:var(--color-text-primary); }
+.fin-src-val { font-size:19px; font-weight:700; color:#fff; margin-top:4px; }
+.fin-src-vl { font-size:11px; font-weight:500; color:var(--color-text-secondary); }
+.fin-src-sub { font-size:11px; color:var(--color-text-secondary); margin-top:6px; line-height:1.4; }
+
+.fin-flow-title { font-size:var(--fs-h3); font-weight:600; color:var(--color-text-primary); margin:20px 0 10px; }
+.fin-flow { display:flex; align-items:stretch; gap:8px; flex-wrap:wrap; }
+.fin-flow-node { flex:1 1 130px; min-width:120px; padding:10px 12px; border-radius:12px; background:var(--color-surface-elevated); border:1px solid var(--color-border); }
+.fin-flow-node.accent { background:color-mix(in srgb, var(--color-primary) 14%, var(--color-surface-elevated)); border-color:var(--color-primary); }
+.fin-flow-l { font-size:11px; color:var(--color-text-secondary); }
+.fin-flow-v { font-size:15px; font-weight:700; color:#fff; margin-top:2px; }
+.fin-flow-op { display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; color:var(--color-text-secondary); padding:0 2px; }
+
+.fin-reco { margin-top:16px; display:grid; gap:10px; }
+.fin-reco-row { display:flex; gap:10px; align-items:flex-start; font-size:12.5px; color:var(--color-text-secondary); line-height:1.5; }
+.fin-reco-dot { flex:0 0 auto; width:10px; height:10px; border-radius:50%; margin-top:5px; }
+.fin-reco-t strong { color:var(--color-text-primary); }
+.fin-ok-txt { color:var(--color-primary); }
+.fin-warn-txt { color:var(--color-warning); }
+
+/* Begrippen & afkortingen */
+.fin-gloss-panel { background:var(--color-surface-elevated); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:14px; margin-bottom:14px; }
+.fin-gloss-search { width:100%; max-width:340px; margin-bottom:12px; }
+.fin-gloss-groep { margin-bottom:14px; }
+.fin-gloss-gt { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--color-primary); margin-bottom:8px; }
+.fin-gloss-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:8px; }
+.fin-gloss-item { display:flex; gap:10px; padding:8px 10px; border-radius:10px; background:var(--color-card); border:1px solid var(--color-border-muted); }
+.fin-gloss-afk { flex:0 0 auto; font-family:monospace; font-size:12px; font-weight:700; color:var(--color-text-primary); background:var(--color-secondary); padding:2px 8px; border-radius:var(--radius-xs); height:fit-content; }
+.fin-gloss-term { font-size:12.5px; font-weight:600; color:var(--color-text-primary); }
+.fin-gloss-uit { font-size:11.5px; color:var(--color-text-secondary); margin-top:2px; line-height:1.4; }
+
+@media(max-width:640px){
+  .fin-kg { grid-template-columns:repeat(2,1fr); }
+  .fin-confirm-row .btn { width:100%; }
+  .fin-two { grid-template-columns:1fr; }
+  .fin-chart-grid { grid-template-columns:1fr; }
+  .fin-src-grid, .fin-gloss-grid { grid-template-columns:1fr; }
+  /* Meerkolommige geld-tabellen: kolomkoppen behouden en horizontaal
+     scrollen binnen de kaart — de generieke mobiele kaart-weergave zou de
+     cellen zonder labels stapelen. De minimumbreedte voorkomt dat
+     table-layout:fixed alle kolommen tot onleesbare ellipsen knijpt. */
+  .tw.keep-table .fin-tbl { min-width:520px; }
+}
+
+/* Print / PDF: chrome verbergen, kaartkleuren behouden, niet midden in
+   een kaart afbreken. */
+@media print {
+  .topbar, #bgFx, .ham-btn, .fin-toolbar-btns, #finUploadHost, #finUploads { display:none !important; }
+  body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .main { padding:0; max-width:none; }
+  .fin-kpi, .fin-card, .cc, .insight-card, .fin-tbl tr { break-inside:avoid; }
+  .fin-chart-grid, .fin-two { grid-template-columns:1fr 1fr; }
+}
